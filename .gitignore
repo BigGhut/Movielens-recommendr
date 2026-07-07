@@ -12,6 +12,7 @@ catboost_info/
 artifacts/
 *.zip
 .agents/
+*.egg-info/
 
 # UI
 app/node_modules/
