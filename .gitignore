@@ -1,0 +1,17 @@
+data/raw/*
+artifacts/models/*
+artifacts/indexes/*
+__pycache__
+*.pyc
+.env
+metrics.json
+.pytest_cache/
+.ruff_cache/
+data/
+catboost_info/
+artifacts/
+*.zip
+
+# UI
+app/node_modules/
+app/dist/

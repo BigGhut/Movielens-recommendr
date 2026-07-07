@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎬 Movie Recommender — HeteroGNN + CatBoost</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <!-- Background Elements for Glassmorphism -->
+    <div class="blob blob-purple"></div>
+    <div class="blob blob-cyan"></div>
+
+    <div class="container">
+      <header>
+        <h1>Movie Recommender</h1>
+        <p class="subtitle">Powered by Heterogeneous Graph Neural Network & CatBoost</p>
+      </header>
+
+      <main>
+        <!-- Sidebar: User Selection -->
+        <aside class="sidebar glass-panel">
+          <h2>Select User</h2>
+          <p>Enter a User ID (1 - 6040)</p>
+          <div class="input-group">
+            <input type="number" id="userIdInput" min="1" max="6040" value="1" placeholder="User ID">
+            <button id="getRecsBtn">Get Recommendations</button>
+          </div>
+          
+          <div id="coldStartWarning" class="warning hidden">
+            <span>⚠️</span> Cold Start User: Showing popular recommendations.
+          </div>
+        </aside>
+
+        <!-- Main Content: History and Recs -->
+        <div class="content-area">
+          <!-- History Section -->
+          <section class="history-section glass-panel">
+            <h2>User History <span>(Recently Rated)</span></h2>
+            <div id="historyList" class="movie-grid">
+              <!-- Cards will be injected here -->
+            </div>
+            <div id="historyLoader" class="loader hidden"></div>
+          </section>
+
+          <!-- Recommendations Section -->
+          <section class="recs-section glass-panel glow-border">
+            <h2>Top Recommendations</h2>
+            <div id="recsList" class="movie-grid">
+              <!-- Cards will be injected here -->
+            </div>
+            <div id="recsLoader" class="loader hidden"></div>
+          </section>
+        </div>
+      </main>
+
+      <!-- Footer: Metrics -->
+      <footer class="metrics-panel glass-panel">
+        <div class="metric-header">
+          <h3>Model Metrics</h3>
+          <span id="healthStatus" class="badge">API Status: Unknown</span>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <h4>Popularity Baseline</h4>
+            <p id="metricBaseline">-</p>
+          </div>
+          <div class="metric-card">
+            <h4>Retrieval Only (GNN)</h4>
+            <p id="metricRetrieval">-</p>
+          </div>
+          <div class="metric-card accent">
+            <h4>Full Pipeline (CatBoost)</h4>
+            <p id="metricFull">-</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

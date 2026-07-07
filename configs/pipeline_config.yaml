@@ -1,0 +1,5 @@
+data_dir: "data"
+raw_data_dir: "data/raw/ml-1m"
+processed_data_dir: "data/processed"
+models_dir: "artifacts/models"
+indexes_dir: "artifacts/indexes"
