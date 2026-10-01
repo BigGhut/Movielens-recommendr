@@ -1,0 +1,31 @@
+{
+  "git_commit": "79982d0bb0168c2d966ec1044e8745f22bc1f675",
+  "seed": 42,
+  "positive_threshold": 4,
+  "k": 10,
+  "split": "per_user_leave_last_out",
+  "n_users_after_min_ratings": 6040,
+  "n_users_evaluated": 3563,
+  "n_users_excluded_last_rating_below_threshold": 2477,
+  "users_below_threshold": "excluded_from_the_mean",
+  "metrics": {
+    "popularity_baseline": {
+      "precision@10": 0.002217232669099074,
+      "recall@10": 0.02217232669099074,
+      "ndcg@10": 0.010418880851491216,
+      "map@10": 0.007015779461751958
+    },
+    "retrieval_only": {
+      "precision@10": 0.009570586584339043,
+      "recall@10": 0.0957058658433904,
+      "ndcg@10": 0.04303552101150869,
+      "map@10": 0.02740322717168072
+    },
+    "full_pipeline": {
+      "precision@10": 0.01658714566376649,
+      "recall@10": 0.1658714566376649,
+      "ndcg@10": 0.08665906317519945,
+      "map@10": 0.06266900997465129
+    }
+  }
+}

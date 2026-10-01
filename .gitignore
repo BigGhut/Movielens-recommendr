@@ -4,7 +4,7 @@ artifacts/indexes/*
 __pycache__
 *.pyc
 .env
-metrics.json
+/metrics.json
 .pytest_cache/
 .ruff_cache/
 /data/
