@@ -1,15 +1,34 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from src.retrieval.index import FAISSIndex
-from src.models.ranker import CatBoostRanker
+from src.retrieval.candidates import unseen_candidates
+from src.models.ranker import CatBoostRanker, ranker_inputs
 from src.data.feature_store import build_pair_features
+
+BLEND_PATH = Path("artifacts/models/ranker_blend.json")
+
+
+def _load_ranker_blend(path: Path = BLEND_PATH) -> tuple[str, float]:
+    """How to mix the ranker score with cosine. Missing file means model score only."""
+    if not path.exists():
+        return "blend", 0.0
+    with path.open(encoding="utf-8") as f:
+        payload = json.load(f)
+    mode = payload.get("mode", "blend")
+    beta = float(payload.get("beta", 0.0))
+    return mode, beta
+
 
 class RecommendationPipeline:
     def __init__(self, user_embs: np.ndarray, item_embs: np.ndarray, 
                  faiss_index: FAISSIndex, catboost_ranker: CatBoostRanker, 
                  user_features: pd.DataFrame, item_features: pd.DataFrame, 
                  user2idx: dict, item2idx: dict, idx2item: dict, 
-                 movies_df: pd.DataFrame, ratings_df: pd.DataFrame, config: dict, user_genre_profiles: dict = None):
+                 movies_df: pd.DataFrame, ratings_df: pd.DataFrame, config: dict, user_genre_profiles: dict = None,
+                 user_recent_embs: np.ndarray = None):
         self.user_embs = user_embs
         self.item_embs = item_embs
         self.faiss_index = faiss_index
@@ -25,6 +44,8 @@ class RecommendationPipeline:
         self.user_history = ratings_df.groupby('user_id')['item_id'].apply(set).to_dict()
         self.config = config
         self.user_genre_profiles = user_genre_profiles
+        self.user_recent_embs = user_recent_embs
+        self.ranker_mode, self.ranker_beta = _load_ranker_blend()
         
         # Предрасчет популярных фильмов для cold-start
         item_counts = ratings_df['item_id'].value_counts()
@@ -51,53 +72,30 @@ class RecommendationPipeline:
             
         u_idx = self.user2idx[user_id]
         u_emb = self.user_embs[u_idx:u_idx+1]
-        
-        # 1. Retrieval
-        retrieval_k = self.config.get('retrieval_top_k', 200)
-        distances, indices = self.faiss_index.search(u_emb, retrieval_k * 2) # берем с запасом для фильтрации истории
-        
-        candidates = []
         history = self.user_history.get(user_id, set())
-        
-        for c_idx in indices[0]:
-            if c_idx not in self.idx2item:
-                continue
-            item_id = self.idx2item[c_idx]
-            if item_id not in history:
-                candidates.append(item_id)
-            if len(candidates) >= retrieval_k:
-                break
-                
+        candidates = unseen_candidates(
+            u_emb, self.faiss_index, self.idx2item, history, self._retrieval_k()
+        )
         if not candidates:
             return self.recommend_cold_start(top_k)
-            
-        # 2. Re-ranking
-        ranks = list(range(len(candidates)))
-        pairs_df = pd.DataFrame({'user_id': [user_id]*len(candidates), 'item_id': candidates, 'retrieval_rank': [0.0]*len(candidates)})
-        
-        X = build_pair_features(self.user_features, self.item_features, 
-                                self.user_embs, self.item_embs, 
-                                self.user2idx, self.item2idx, pairs_df, self.user_genre_profiles)
-                                
-        cat_features = ['most_common_genre', 'gender', 'occupation', 'zip']
-        text_features = ['genres']
-        for col in cat_features + text_features:
-            if col in X.columns:
-                X[col] = X[col].fillna("Unknown").astype(str)
-                
-        for col in text_features:
-            if col in X.columns:
-                X[col] = X[col].str.replace('|', ' ', regex=False)
-                
-        X_predict = X.drop(columns=['user_id', 'item_id', 'title'], errors='ignore')
-        
-        baseline = X_predict['cosine_similarity'].values
-        X_predict = X_predict.drop(columns=['cosine_similarity'], errors='ignore')
-        
-        scores = self.catboost_ranker.predict(X_predict)
-        
-        # Сортировка по скору CatBoost + baseline
-        pairs_df['score'] = scores + baseline
+
+        pairs_df = pd.DataFrame({
+            'user_id': [user_id] * len(candidates),
+            'item_id': candidates,
+            'retrieval_rank': list(range(len(candidates))),
+        })
+        X = build_pair_features(
+            self.user_features, self.item_features,
+            self.user_embs, self.item_embs,
+            self.user2idx, self.item2idx, pairs_df, self.user_genre_profiles,
+            user_recent_embs=self.user_recent_embs,
+        )
+        model_frame, baseline = ranker_inputs(X)
+        if self.ranker_mode == 'retrieval':
+            pairs_df['score'] = baseline
+        else:
+            scores = self.catboost_ranker.predict(model_frame)
+            pairs_df['score'] = baseline + self.ranker_beta * scores
         pairs_df = pairs_df.sort_values('score', ascending=False).head(top_k)
         
         # Формирование ответа
@@ -114,6 +112,12 @@ class RecommendationPipeline:
                 })
                 
         return results
+
+    def _retrieval_k(self) -> int:
+        if 'retrieval_top_k' in self.config:
+            return int(self.config['retrieval_top_k'])
+        pipeline_cfg = self.config.get('pipeline') or {}
+        return int(pipeline_cfg.get('retrieval_top_k', 200))
 
     def recommend_cold_start(self, top_k: int = 10) -> list[dict]:
         """Возвращает популярные фильмы для холодных пользователей."""

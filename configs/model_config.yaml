@@ -8,6 +8,8 @@ two_tower:
   batch_size: 1024
   temperature: 0.07
   seed: 42
+  recent_k: 10
+  hard_negatives: 8
 
 ranker:
   iterations: 500

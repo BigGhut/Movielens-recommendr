@@ -37,26 +37,31 @@ async def lifespan(app: FastAPI):
         from src.pipeline.recommend import RecommendationPipeline
         from src.retrieval.index import FAISSIndex
         from src.models.ranker import CatBoostRanker
-        from src.data.preprocessing import create_id_mappings, load_movies, load_ratings
-        from src.data.feature_store import build_user_features, build_item_features, build_user_genre_profiles
+        from src.data.preprocessing import (
+            create_id_mappings, load_movies, load_ratings, load_users, temporal_split,
+        )
+        from src.data.feature_store import (
+            build_user_features, build_item_features, build_user_genre_profiles, build_recent_centroids,
+        )
         import numpy as np
 
         print("Загрузка данных...")
         data_dir = Path("data/raw/ml-1m")
         movies_df = load_movies(data_dir)
         ratings_df = load_ratings(data_dir)
-        
-        users_df = pd.read_csv(data_dir / 'users.dat', sep='::', engine='python', encoding='latin-1',
-                               names=['user_id', 'gender', 'age', 'occupation', 'zip'])
-        
-        user2idx, item2idx = create_id_mappings(ratings_df)
-        idx2user = {v: k for k, v in user2idx.items()}
+        users_df = load_users(data_dir)
+        train_df, _val_df, _test_df = temporal_split(ratings_df)
+
+        # Индекс эмбеддингов построен по train. Признаки тоже только из train,
+        # иначе статистики валидации и теста попадают в скоры.
+        user2idx, item2idx = create_id_mappings(train_df)
         idx2item = {v: k for k, v in item2idx.items()}
-        
+
         print("Загрузка фичей...")
-        user_features = build_user_features(ratings_df, movies_df, users_df)
-        item_features = build_item_features(ratings_df, movies_df)
-        user_genre_profiles = build_user_genre_profiles(ratings_df, movies_df)
+        user_features = build_user_features(train_df, movies_df, users_df)
+        item_features = build_item_features(train_df, movies_df)
+        user_genre_profiles = build_user_genre_profiles(train_df, movies_df)
+        recent_k = int(config.get("two_tower", {}).get("recent_k", 10))
         
         print("Загрузка моделей...")
         faiss_index = FAISSIndex.load(Path("artifacts/indexes/faiss_index.index"))
@@ -64,6 +69,7 @@ async def lifespan(app: FastAPI):
         
         user_embs = np.load("artifacts/models/user_embeddings.npy")
         item_embs = np.load("artifacts/models/item_embeddings.npy")
+        user_recent_embs = build_recent_centroids(train_df, item_embs, user2idx, item2idx, recent_k)
         
         print("Инициализация пайплайна...")
         pipeline = RecommendationPipeline(
@@ -71,7 +77,8 @@ async def lifespan(app: FastAPI):
             faiss_index=faiss_index, catboost_ranker=catboost_ranker,
             user_features=user_features, item_features=item_features,
             user2idx=user2idx, item2idx=item2idx, idx2item=idx2item,
-            movies_df=movies_df, ratings_df=ratings_df, config=config, user_genre_profiles=user_genre_profiles
+            movies_df=movies_df, ratings_df=ratings_df, config=config, user_genre_profiles=user_genre_profiles,
+            user_recent_embs=user_recent_embs,
         )
         app.state.pipeline = pipeline
         print("Модели успешно загружены!")

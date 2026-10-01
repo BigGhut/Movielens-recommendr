@@ -119,17 +119,17 @@ def train():
         item_embeddings = z_dict['movie'].cpu().numpy()
         
     Path("artifacts/models").mkdir(parents=True, exist_ok=True)
-    np.save("artifacts/models/user_embeddings.npy", user_embeddings)
-    np.save("artifacts/models/item_embeddings.npy", item_embeddings)
-    print("Эмбеддинги GNN успешно сохранены в artifacts/models/!")
-    
+    np.save("artifacts/models/gnn_user_embeddings.npy", user_embeddings)
+    np.save("artifacts/models/gnn_item_embeddings.npy", item_embeddings)
+    print("Эмбеддинги GNN сохранены отдельно от two-tower: artifacts/models/gnn_*.npy")
+
     from src.retrieval.index import FAISSIndex
-    print("Построение FAISS индекса...")
-    faiss_index = FAISSIndex(embedding_dim=64)
+    print("Построение FAISS индекса GNN...")
+    faiss_index = FAISSIndex(embedding_dim=item_embeddings.shape[1])
     faiss_index.build(item_embeddings)
     Path("artifacts/indexes").mkdir(parents=True, exist_ok=True)
-    faiss_index.save(Path("artifacts/indexes/faiss_index.index"))
-    print("FAISS индекс сохранен!")
+    faiss_index.save(Path("artifacts/indexes/gnn_faiss.index"))
+    print("GNN индекс сохранен в artifacts/indexes/gnn_faiss.index")
 
 if __name__ == '__main__':
     train()

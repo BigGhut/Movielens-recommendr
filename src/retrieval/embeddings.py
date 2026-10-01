@@ -4,15 +4,11 @@ from src.models.two_tower import TwoTowerModel
 
 @torch.no_grad()
 def generate_all_item_embeddings(model: TwoTowerModel, item2idx: dict, device: torch.device) -> np.ndarray:
-    """Генерирует эмбеддинги для всех фильмов."""
+    """L2-normalized item vectors, including genre and year stored on the model."""
     model.eval()
     model.to(device)
-    num_items = len(item2idx)
-    all_item_ids = torch.arange(num_items, device=device)
-    
-    # Можно батчевать, если элементов очень много, но для ML-1M (3700 фильмов) влезет целиком
-    item_embs = model.item_tower(all_item_ids)
-    return item_embs.cpu().numpy()
+    item_ids = torch.arange(len(item2idx), device=device)
+    return model.encode_items(item_ids).cpu().numpy()
 
 @torch.no_grad()
 def generate_user_embedding(model: TwoTowerModel, user_idx: int, device: torch.device) -> np.ndarray:
@@ -30,5 +26,11 @@ def generate_all_user_embeddings(model: TwoTowerModel, user2idx: dict, device: t
     model.to(device)
     num_users = len(user2idx)
     all_user_ids = torch.arange(num_users, device=device)
-    user_embs = model.user_tower(all_user_ids)
+    user_embs = model.encode_users(
+        all_user_ids,
+        torch.zeros(num_users, model.item_genre.shape[1], device=device),
+        torch.zeros(num_users, device=device),
+        torch.zeros(num_users, 1, dtype=torch.long, device=device),
+        torch.zeros(num_users, 1, device=device),
+    ) if hasattr(model, "encode_users") else model.user_tower(all_user_ids)
     return user_embs.cpu().numpy()

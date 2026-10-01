@@ -33,9 +33,9 @@ graph TD
 
 | Model | Precision@10 | Recall@10 | NDCG@10 |
 |---|---|---|---|
-| Popularity Baseline | 0.050 | 0.020 | 0.030 |
-| Two-Tower (retrieval-only) | 0.100 | 0.150 | 0.120 |
-| Full Pipeline (Two-Tower + CatBoost) | 0.180 | 0.220 | 0.250 |
+| Popularity Baseline | 0.0022 | 0.0222 | 0.0104 |
+| Two-Tower (retrieval-only) | 0.0096 | 0.0957 | 0.0430 |
+| Full Pipeline (Two-Tower + CatBoost) | 0.0166 | 0.1659 | 0.0867 |
 
 ## 🚀 Quick Start
 

@@ -5,7 +5,7 @@ install:
 	cd app && npm install
 
 train:
-	python -m src.models.train_gnn
+	python -m src.models.train_retrieval
 	python -m src.models.train_ranker
 	python evaluate.py
 

@@ -26,10 +26,13 @@ def main():
     
     from tqdm import tqdm
     from src.pipeline.recommend import RecommendationPipeline
+    from src.retrieval.candidates import unseen_candidates
     from src.retrieval.index import FAISSIndex
     from src.models.ranker import CatBoostRanker
     from src.data.preprocessing import create_id_mappings, load_users, load_movies
-    from src.data.feature_store import build_user_features, build_item_features, build_user_genre_profiles
+    from src.data.feature_store import (
+        build_item_features, build_recent_centroids, build_user_features, build_user_genre_profiles,
+    )
     import numpy as np
     
     users_df = load_users(Path(args.data_dir))
@@ -40,18 +43,21 @@ def main():
     user_features = build_user_features(train_df, movies_df, users_df)
     item_features = build_item_features(train_df, movies_df)
     user_genre_profiles = build_user_genre_profiles(train_df, movies_df)
-    
+
     faiss_index = FAISSIndex.load(Path("artifacts/indexes/faiss_index.index"))
     catboost_ranker = CatBoostRanker.load(Path("artifacts/models/catboost_ranker.cbm"))
     user_embs = np.load("artifacts/models/user_embeddings.npy")
     item_embs = np.load("artifacts/models/item_embeddings.npy")
+    recent_k = int(config.get("two_tower", {}).get("recent_k", 10))
+    user_recent_embs = build_recent_centroids(train_df, item_embs, user2idx, item2idx, recent_k)
     
     pipeline = RecommendationPipeline(
         user_embs=user_embs, item_embs=item_embs,
         faiss_index=faiss_index, catboost_ranker=catboost_ranker,
         user_features=user_features, item_features=item_features,
         user2idx=user2idx, item2idx=item2idx, idx2item=idx2item,
-        movies_df=movies_df, ratings_df=train_df, config=config, user_genre_profiles=user_genre_profiles
+        movies_df=movies_df, ratings_df=train_df, config=config, user_genre_profiles=user_genre_profiles,
+        user_recent_embs=user_recent_embs,
     )
     
     pop_recs = {}
@@ -73,18 +79,11 @@ def main():
         
         u_idx = pipeline.user2idx[u_id]
         u_emb = pipeline.user_embs[u_idx:u_idx+1]
-        distances, indices = pipeline.faiss_index.search(u_emb, 50)
-        
         history = pipeline.user_history.get(u_id, set())
-        ret_cands = []
-        for c_idx in indices[0]:
-            if c_idx not in pipeline.idx2item: continue
-            i_id = pipeline.idx2item[c_idx]
-            if i_id not in history:
-                ret_cands.append(i_id)
-            if len(ret_cands) >= 10:
-                break
-        ret_recs[u_id] = ret_cands
+        # Same candidate list the ranker reorders. Retrieval-only keeps FAISS order.
+        ret_recs[u_id] = unseen_candidates(
+            u_emb, pipeline.faiss_index, pipeline.idx2item, history, pipeline._retrieval_k()
+        )[:10]
         
     results = {
         "popularity_baseline": evaluate_model(pop_recs, ground_truth, 10),

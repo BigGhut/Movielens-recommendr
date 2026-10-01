@@ -7,7 +7,7 @@ __pycache__
 metrics.json
 .pytest_cache/
 .ruff_cache/
-data/
+/data/
 catboost_info/
 artifacts/
 *.zip
