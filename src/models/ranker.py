@@ -1,7 +1,8 @@
-from catboost import CatBoostRanker as CatBoostRankerModel
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from catboost import CatBoostRanker as CatBoostRankerModel
 
 CAT_FEATURES = ['most_common_genre', 'gender', 'occupation', 'zip']
 TEXT_FEATURES = ['genres']
@@ -57,24 +58,30 @@ class CatBoostRanker:
         self.model = CatBoostRankerModel(**kwargs)
         
     def fit(self, X_train: pd.DataFrame, y_train: np.ndarray, qid_train: np.ndarray,
-            X_val: pd.DataFrame = None, y_val: np.ndarray = None, qid_val: np.ndarray = None,
-            baseline_train: np.ndarray = None, baseline_val: np.ndarray = None,
-            cat_features: list[str] = None, text_features: list[str] = None):
+            X_val: pd.DataFrame | None = None, y_val: np.ndarray | None = None, qid_val: np.ndarray | None = None,
+            baseline_train: np.ndarray | None = None, baseline_val: np.ndarray | None = None,
+            cat_features: list[str] | None = None, text_features: list[str] | None = None):
         """Обучает CatBoost-ранкер. Валидация необязательна."""
         from catboost import Pool
-        train_kwargs = dict(
-            data=X_train, label=y_train, group_id=qid_train,
-            cat_features=cat_features, text_features=text_features,
-        )
+        train_kwargs = {
+            "data": X_train,
+            "label": y_train,
+            "group_id": qid_train,
+            "cat_features": cat_features,
+            "text_features": text_features,
+        }
         if baseline_train is not None:
             train_kwargs['baseline'] = baseline_train
         train_pool = Pool(**train_kwargs)
         fit_kwargs = {}
         if X_val is not None:
-            val_kwargs = dict(
-                data=X_val, label=y_val, group_id=qid_val,
-                cat_features=cat_features, text_features=text_features,
-            )
+            val_kwargs = {
+                "data": X_val,
+                "label": y_val,
+                "group_id": qid_val,
+                "cat_features": cat_features,
+                "text_features": text_features,
+            }
             if baseline_val is not None:
                 val_kwargs['baseline'] = baseline_val
             fit_kwargs['eval_set'] = Pool(**val_kwargs)

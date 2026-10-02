@@ -1,7 +1,8 @@
-import os
 import zipfile
-import requests
 from pathlib import Path
+
+import requests
+
 
 def download_movielens(data_dir: Path) -> Path:
     """
@@ -24,8 +25,7 @@ def download_movielens(data_dir: Path) -> Path:
     response.raise_for_status()
     
     with open(zip_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+        f.writelines(response.iter_content(chunk_size=8192))
             
     print("Распаковка архива...")
     with zipfile.ZipFile(zip_path, "r") as zip_ref:

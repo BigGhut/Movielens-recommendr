@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class UserTower(nn.Module):
@@ -104,12 +104,15 @@ class TwoTowerModel(nn.Module):
         user_embs: torch.Tensor,
         item_embs: torch.Tensor,
         temperature: float = 0.07,
-        hard_item_embs: torch.Tensor | None = None,
+        sampled_item_embs: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """InfoNCE. In-batch negatives, plus optional hard negatives of shape [B, H, D]."""
+        """InfoNCE. In-batch negatives, plus optional popularity-sampled negatives [B, N, D].
+
+        The loss does not subtract logQ, so it is not corrected for the sampling distribution.
+        """
         logits = torch.matmul(user_embs, item_embs.T) / temperature
-        if hard_item_embs is not None:
-            hard_logits = torch.einsum("bd,bhd->bh", user_embs, hard_item_embs) / temperature
-            logits = torch.cat([logits, hard_logits], dim=1)
+        if sampled_item_embs is not None:
+            sampled_logits = torch.einsum("bd,bnd->bn", user_embs, sampled_item_embs) / temperature
+            logits = torch.cat([logits, sampled_logits], dim=1)
         labels = torch.arange(user_embs.size(0), device=user_embs.device)
         return F.cross_entropy(logits, labels)

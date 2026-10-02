@@ -1,7 +1,9 @@
-import sys
 import subprocess
-import pytest
+import sys
+
 import pandas as pd
+import pytest
+
 
 @pytest.fixture(scope="module")
 def run_preprocess_baseline(preprocess_script, data_dir, tmp_path_factory):
@@ -16,7 +18,7 @@ def run_preprocess_baseline(preprocess_script, data_dir, tmp_path_factory):
         "--raw-dir", str(raw_dir),
         "--processed-dir", str(data_dir)
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0, f"Preprocess script failed: {res.stderr}"
     
     train = pd.read_csv(data_dir / "train.csv")
@@ -68,7 +70,7 @@ def test_split_exclusivity(run_preprocess_baseline):
 
 def test_data_leakage_absence(run_preprocess_baseline):
     """T1_F1_4: Ensure no test interactions are in train set."""
-    train, val, test = run_preprocess_baseline
+    train, _val, test = run_preprocess_baseline
     # No timestamp in test split is earlier than train split (per user and globally)
     # The global check requires that the test timestamps are after the train timestamps
     for user_id in set(train["user_id"]):
@@ -141,7 +143,7 @@ def test_empty_ratings_input(preprocess_script, tmp_path):
         "--raw-dir", str(raw_dir),
         "--processed-dir", str(processed_dir)
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     # The script should exit with non-zero because of ValueError
     assert res.returncode != 0
     assert "ValueError" in res.stderr or "ValueError" in res.stdout
@@ -180,7 +182,7 @@ def test_extreme_temporal_range(preprocess_script, tmp_path):
         "--raw-dir", str(raw_dir),
         "--processed-dir", str(processed_dir)
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0
     
     train = pd.read_csv(processed_dir / "train.csv")

@@ -1,13 +1,13 @@
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import pandas as pd
-from pathlib import Path
-from tqdm import tqdm
-import numpy as np
 
-from src.data.preprocessing import load_ratings, load_movies, load_users, temporal_split
 from src.data.graph_builder import build_hetero_graph
+from src.data.preprocessing import load_movies, load_ratings, load_users, temporal_split
 from src.models.hetero_gnn import HeteroLinkPredictionModel
+
 
 def train():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,7 +18,7 @@ def train():
     movies_df = load_movies(data_dir)
     users_df = load_users(data_dir)
     
-    train_df, val_df, test_df = temporal_split(ratings)
+    train_df, _val_df, _test_df = temporal_split(ratings)
     
     print("Построение графа...")
     data, user2idx, item2idx, genre2idx = build_hetero_graph(train_df, movies_df, users_df)

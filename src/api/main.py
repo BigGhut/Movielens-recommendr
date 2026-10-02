@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+import yaml
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import yaml
-from pathlib import Path
-import pandas as pd
-import numpy as np
+
 
 # Mocking pipeline initialization for robust startup even without trained models
 # In a real scenario, models would be loaded here.
@@ -17,14 +17,17 @@ class MockPipeline:
     def recommend(self, user_id, top_k=10):
         return []
 
+def _load_model_config() -> dict:
+    config_path = Path("configs/model_config.yaml")
+    if not config_path.exists():
+        return {}
+    with config_path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Попытка загрузить конфигурацию
-    config_path = Path("configs/model_config.yaml")
-    config = {}
-    if config_path.exists():
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
+    config = _load_model_config()
             
     # В реальности здесь:
     # 1. Загрузка TwoTowerModel
@@ -34,16 +37,24 @@ async def lifespan(app: FastAPI):
     # 5. Инициализация RecommendationPipeline
     
     try:
+        import numpy as np
+
+        from src.data.feature_store import (
+            build_item_features,
+            build_recent_centroids,
+            build_user_features,
+            build_user_genre_profiles,
+        )
+        from src.data.preprocessing import (
+            create_id_mappings,
+            load_movies,
+            load_ratings,
+            load_users,
+            temporal_split,
+        )
+        from src.models.ranker import CatBoostRanker
         from src.pipeline.recommend import RecommendationPipeline
         from src.retrieval.index import FAISSIndex
-        from src.models.ranker import CatBoostRanker
-        from src.data.preprocessing import (
-            create_id_mappings, load_movies, load_ratings, load_users, temporal_split,
-        )
-        from src.data.feature_store import (
-            build_user_features, build_item_features, build_user_genre_profiles, build_recent_centroids,
-        )
-        import numpy as np
 
         print("Загрузка данных...")
         data_dir = Path("data/raw/ml-1m")
@@ -83,8 +94,8 @@ async def lifespan(app: FastAPI):
         app.state.pipeline = pipeline
         print("Модели успешно загружены!")
         
-    except Exception as e:
-        print(f"Внимание: Ошибка при загрузке полных моделей ({e}). Запуск в мок-режиме.")
+    except Exception as exc:  # noqa: BLE001 - missing data or weights must still boot the mock pipeline
+        print(f"Внимание: Ошибка при загрузке полных моделей ({exc}). Запуск в мок-режиме.")
         app.state.pipeline = MockPipeline()
         
     yield
@@ -106,6 +117,7 @@ app.add_middleware(
 )
 
 from src.api.routers import recommend
+
 app.include_router(recommend.router)
 
 if __name__ == "__main__":

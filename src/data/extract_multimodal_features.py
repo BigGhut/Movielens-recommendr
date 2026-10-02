@@ -1,10 +1,12 @@
-import pandas as pd
-import numpy as np
-import torch
 from pathlib import Path
-from tqdm import tqdm
+
+import pandas as pd
+import torch
 from PIL import Image
+from tqdm import tqdm
+
 from src.models.multimodal_encoders import TextEncoder, VisionEncoder
+
 
 def extract_features(data_dir: Path, output_dir: Path, batch_size: int = 32):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -36,10 +38,9 @@ def extract_features(data_dir: Path, output_dir: Path, batch_size: int = 32):
         images = []
         valid_indices = []
         for idx, row in batch.iterrows():
-            poster_filename = f"{row['Id']}_{row['Title'].replace(':', '').replace('/', '')}.jpg"
             # Простой способ найти постер по Id
             poster_files = list(posters_dir.glob(f"{row['Id']}_*.jpg"))
-            
+
             img_loaded = False
             if poster_files:
                 try:
@@ -47,8 +48,8 @@ def extract_features(data_dir: Path, output_dir: Path, batch_size: int = 32):
                     images.append(img)
                     valid_indices.append(idx)
                     img_loaded = True
-                except Exception as e:
-                    pass
+                except (OSError, ValueError):
+                    img_loaded = False
                     
             if not img_loaded:
                 # Dummy image

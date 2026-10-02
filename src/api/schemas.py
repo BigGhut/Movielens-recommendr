@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+
 
 class RecommendationItem(BaseModel):
     item_id: int
@@ -9,7 +9,7 @@ class RecommendationItem(BaseModel):
 
 class RecommendationResponse(BaseModel):
     user_id: int
-    recommendations: List[RecommendationItem]
+    recommendations: list[RecommendationItem]
     is_cold_start: bool
 
 class HealthResponse(BaseModel):
@@ -19,6 +19,6 @@ class HealthResponse(BaseModel):
     num_users: int
 
 class MetricsResponse(BaseModel):
-    popularity_baseline: Dict[str, float]
-    retrieval_only: Dict[str, float]
-    full_pipeline: Dict[str, float]
+    popularity_baseline: dict[str, float]
+    retrieval_only: dict[str, float]
+    full_pipeline: dict[str, float]

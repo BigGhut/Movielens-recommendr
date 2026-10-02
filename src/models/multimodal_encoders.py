@@ -1,7 +1,8 @@
 import torch
-import torch.nn as nn
-from transformers import AutoTokenizer, AutoModel, ViTImageProcessor, ViTModel
 from PIL import Image
+from torch import nn
+from transformers import AutoModel, AutoTokenizer, ViTImageProcessor, ViTModel
+
 
 class TextEncoder(nn.Module):
     def __init__(self, model_name: str = "distilbert-base-uncased"):

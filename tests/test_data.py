@@ -1,12 +1,14 @@
-import pytest
 from pathlib import Path
-from src.data.preprocess import (
-    load_raw_data,
-    filter_users,
-    temporal_split,
-    preprocess_and_save
-)
+
+import pytest
+
 from src.data.loader import MovieLensDataLoader
+from src.data.preprocessing import (
+    filter_users,
+    load_raw_data,
+    preprocess_and_save,
+    split_ratings_by_time,
+)
 
 
 @pytest.fixture
@@ -79,7 +81,7 @@ def mock_raw_data(tmp_path) -> Path:
 
 def test_user_filtering(mock_raw_data):
     """Test T1_F1_1: Verify filtering of low-interaction users (< 5 ratings)."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     
     # User 1 has 4 ratings, others have >= 5
     filtered_ratings = filter_users(ratings, min_interactions=5)
@@ -96,7 +98,7 @@ def test_user_filtering(mock_raw_data):
 
 def test_user_filtering_borderline(mock_raw_data):
     """Test T2_F1_1 & T2_F1_2: Verify split for borderline user with 5 ratings, and filtering for user with 4 ratings."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     
     # Filter with min_interactions=5 (User 1 has 4, User 2 has 5)
     filtered_ratings = filter_users(ratings, min_interactions=5)
@@ -108,7 +110,7 @@ def test_user_filtering_borderline(mock_raw_data):
     assert 2 in filtered_ratings["user_id"].unique()
     
     # Split the filtered data
-    train, val, test = temporal_split(filtered_ratings)
+    train, val, test = split_ratings_by_time(filtered_ratings)
     
     # For User 2 (5 ratings): 3 in train, 1 in validation, 1 in test
     u2_train = train[train["user_id"] == 2]
@@ -122,9 +124,9 @@ def test_user_filtering_borderline(mock_raw_data):
 
 def test_temporal_split_logic(mock_raw_data):
     r"""Test T1_F1_2: Verify train/val/test temporal sequence ($T_{train} \le T_{val} \le T_{test}$)."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     filtered = filter_users(ratings, min_interactions=5)
-    train, val, test = temporal_split(filtered)
+    train, val, test = split_ratings_by_time(filtered)
     
     # For each user, verify temporal boundaries
     for user_id in [2, 3]:
@@ -142,9 +144,9 @@ def test_temporal_split_logic(mock_raw_data):
 
 def test_split_exclusivity(mock_raw_data):
     """Test T1_F1_3 & T1_F1_4: Verify no overlap between splits (disjoint sets of records)."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     filtered = filter_users(ratings, min_interactions=5)
-    train, val, test = temporal_split(filtered)
+    train, val, test = split_ratings_by_time(filtered)
     
     # Verify no overlap based on key columns (user_id, movie_id, timestamp)
     def to_tuple_set(df):
@@ -161,9 +163,9 @@ def test_split_exclusivity(mock_raw_data):
 
 def test_split_proportions(mock_raw_data):
     """Test T1_F1_5: Verify exact counts of validation and test (exactly 1 record per user)."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     filtered = filter_users(ratings, min_interactions=5)
-    train, val, test = temporal_split(filtered)
+    _train, val, test = split_ratings_by_time(filtered)
     
     unique_users = filtered["user_id"].unique()
     num_users = len(unique_users)
@@ -178,12 +180,12 @@ def test_split_proportions(mock_raw_data):
 
 def test_identical_timestamps(mock_raw_data):
     """Test T2_F1_3: Verify split logic when timestamps are identical (deterministic sorting by movie_id)."""
-    ratings, users, movies = load_raw_data(mock_raw_data)
+    ratings, _users, _movies = load_raw_data(mock_raw_data)
     filtered = filter_users(ratings, min_interactions=5)
     
     # User 4 has 5 ratings all with timestamp=1000 and movie_ids: [103, 101, 105, 102, 104]
     # Sorted order of movie_id: 101, 102, 103, 104, 105
-    train, val, test = temporal_split(filtered)
+    train, val, test = split_ratings_by_time(filtered)
     
     u4_train = train[train["user_id"] == 4]
     u4_val = val[val["user_id"] == 4]

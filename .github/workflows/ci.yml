@@ -30,4 +30,5 @@ jobs:
         
     - name: Test with pytest
       run: |
-        pytest tests/ -v
+        # MovieLens files are not in the repo, so the e2e suite uses its mock path.
+        pytest tests/ -v --use-mock-data

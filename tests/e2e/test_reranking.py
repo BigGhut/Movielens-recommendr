@@ -1,8 +1,9 @@
-import sys
 import subprocess
-import pytest
-import numpy as np
+import sys
+
 import lightgbm as lgb
+import numpy as np
+import pytest
 
 # --- Fixtures ---
 
@@ -10,8 +11,8 @@ import lightgbm as lgb
 def run_reranking_train(reranking_train_script, model_dir, data_dir):
     """Run GBDT reranking training to produce the mock model."""
     # Ensure preprocess baseline is run
-    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--processed-dir", str(data_dir)]
-    subprocess.run(cmd_prep, capture_output=True)
+    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--raw-dir", str(data_dir / "raw"), "--processed-dir", str(data_dir)]
+    subprocess.run(cmd_prep, capture_output=True, check=False)
     
     cmd = [
         sys.executable,
@@ -19,7 +20,7 @@ def run_reranking_train(reranking_train_script, model_dir, data_dir):
         "--model-dir", str(model_dir),
         "--data-dir", str(data_dir)
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0, f"Reranking training failed: {res.stderr}"
     return model_dir
 
@@ -76,7 +77,7 @@ def test_gbdt_scoring_monotonicity(run_reranking_train):
     candidate_ids = list(range(1, 101))
     feature_matrix = np.random.randn(100, 8)
     
-    top_10, sorted_candidates = rerank_candidates(1, candidate_ids, feature_matrix, model)
+    _top_10, sorted_candidates = rerank_candidates(1, candidate_ids, feature_matrix, model)
     
     # Check monotonicity of sorted list
     scores = [score for cid, score in sorted_candidates]

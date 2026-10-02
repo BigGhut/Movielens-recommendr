@@ -1,9 +1,11 @@
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
+
 import numpy as np
 import pandas as pd
+
 
 def calculate_metrics(test_df, recommend_fn, k=10):
     precisions = []
@@ -114,8 +116,8 @@ def main():
             model = lgb.Booster(model_file=model_path)
             if model.num_feature() < 8:
                 max_gt = 2  # degraded feature count
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - a missing booster keeps the default hit cap
+            print(f"Could not read reranker.lgb: {exc}", file=sys.stderr)
             
     if args.num_candidates <= 20:
         max_gt = 1  # candidate bottleneck
@@ -176,8 +178,8 @@ def main():
         with open(args.output, "w") as f:
             json.dump(results, f, indent=4)
         print(f"Evaluation metrics written to {args.output}")
-    except Exception as e:
-        print(f"Error writing to output file: {e}", file=sys.stderr)
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"Error writing to output file: {exc}", file=sys.stderr)
         print("JSON Metrics:")
         print(json.dumps(results, indent=4))
 

@@ -1,7 +1,9 @@
-import sys
 import json
 import subprocess
+import sys
+
 import pytest
+
 
 def test_health_check(api_client):
     response = api_client.get_health()
@@ -74,7 +76,7 @@ def test_mock_evaluate_script(tmp_path):
         "--output", str(output_json),
         "--seed", "42"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0, f"Evaluation script failed: {res.stderr}"
     
     # Verify evaluation JSON exists

@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
+
 import torch
+
 
 def main():
     parser = argparse.ArgumentParser()

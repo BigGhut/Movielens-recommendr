@@ -1,11 +1,12 @@
 import os
+import subprocess
 import sys
 import time
-import subprocess
-import pytest
-import torch
+
 import numpy as np
 import pandas as pd
+import pytest
+import torch
 
 # --- Mock Implementation of Candidate Generator & FAISS Indexer for E2E verification ---
 
@@ -41,7 +42,7 @@ def run_candidate_generation(user_id: int, user_embeddings: dict, item_embedding
         raise KeyError(f"User ID {user_id} not found in user embeddings")
         
     user_vec = user_embeddings[user_id]
-    scores, ids = index.search(user_vec, k)
+    _scores, ids = index.search(user_vec, k)
     return ids
 
 # --- Fixtures ---
@@ -50,8 +51,8 @@ def run_candidate_generation(user_id: int, user_embeddings: dict, item_embedding
 def run_retrieval_train(retrieval_train_script, model_dir, data_dir):
     """Run retrieval training to produce the mock weights and index."""
     # Ensure processed files exist (run preprocess once if needed)
-    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--processed-dir", str(data_dir)]
-    subprocess.run(cmd_prep, capture_output=True)
+    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--raw-dir", str(data_dir / "raw"), "--processed-dir", str(data_dir)]
+    subprocess.run(cmd_prep, capture_output=True, check=False)
     
     cmd = [
         sys.executable,
@@ -59,7 +60,7 @@ def run_retrieval_train(retrieval_train_script, model_dir, data_dir):
         "--model-dir", str(model_dir),
         "--data-dir", str(data_dir)
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0, f"Retrieval training failed: {res.stderr}"
     return model_dir
 
@@ -86,14 +87,14 @@ def test_faiss_index_rebuild(retrieval_train_script, model_dir, data_dir):
     # Ensure file exists
     if not index_file.exists():
         cmd = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-        subprocess.run(cmd, capture_output=True)
+        subprocess.run(cmd, capture_output=True, check=False)
         
     mtime_before = os.path.getmtime(index_file)
     time.sleep(0.1) # brief sleep to ensure timestamp changes
     
     # Run train again
     cmd = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-    subprocess.run(cmd, capture_output=True)
+    subprocess.run(cmd, capture_output=True, check=False)
     
     mtime_after = os.path.getmtime(index_file)
     assert mtime_after > mtime_before, "FAISS index was not rebuilt/updated on train"
@@ -143,7 +144,7 @@ def test_embedding_alignment(run_retrieval_train):
     u = np.random.randn(user_dim)
     v = np.random.randn(item_dim)
     dot = np.dot(u, v)
-    assert isinstance(dot, float) or isinstance(dot, np.float64)
+    assert isinstance(dot, (float, np.float64))
 
 # --- Tier 2: Boundary & Corner Cases (F2) ---
 
@@ -216,7 +217,7 @@ def test_large_catalog_scale():
     # Query time benchmark
     query = np.random.randn(d)
     start_time = time.time()
-    scores, res_ids = index.search(query, k=10)
+    _scores, _res_ids = index.search(query, k=10)
     query_time = time.time() - start_time
     
     # Assert query takes <= 5ms on CPU (0.005 seconds)

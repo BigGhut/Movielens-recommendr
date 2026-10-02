@@ -1,21 +1,22 @@
-import sys
-import json
-import time
-import subprocess
-import pytest
 import concurrent.futures
+import json
+import subprocess
+import sys
+import time
+
 import pandas as pd
+import pytest
 
 # --- Tier 3: Cross-Feature Combinations (7 Tests) ---
 
 @pytest.fixture(scope="module", autouse=True)
 def run_pipelines_setup(preprocess_script, retrieval_train_script, reranking_train_script, data_dir, model_dir):
-    cmd_prep = [sys.executable, preprocess_script, "--processed-dir", str(data_dir)]
-    subprocess.run(cmd_prep, capture_output=True)
+    cmd_prep = [sys.executable, preprocess_script, "--raw-dir", str(data_dir / "raw"), "--processed-dir", str(data_dir)]
+    subprocess.run(cmd_prep, capture_output=True, check=False)
     cmd_ret = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-    subprocess.run(cmd_ret, capture_output=True)
+    subprocess.run(cmd_ret, capture_output=True, check=False)
     cmd_rer = [sys.executable, reranking_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-    subprocess.run(cmd_rer, capture_output=True)
+    subprocess.run(cmd_rer, capture_output=True, check=False)
 
 def test_temporal_split_and_cold_start_integration(api_client, data_dir):
     """1. test_temporal_split_and_cold_start_integration (F1 <-> F4)
@@ -79,7 +80,7 @@ def test_faiss_rebuild_and_api_consistency(api_client, retrieval_train_script, m
         
         # Run training to overwrite index
         cmd = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-        train_res = subprocess.run(cmd, capture_output=True)
+        train_res = subprocess.run(cmd, capture_output=True, check=False)
         assert train_res.returncode == 0
         
         successes = query_future.result()
@@ -116,7 +117,7 @@ def test_eval_metrics_and_gbdt_features_alignment(evaluate_script, reranking_tra
         "--data-dir", str(data_dir),
         "--model-dir", str(model_dir),
         "--output", str(out_normal)
-    ], capture_output=True)
+    ], capture_output=True, check=False)
     
     with open(out_normal, "r") as f:
         metrics_normal = json.load(f)
@@ -138,7 +139,7 @@ def test_eval_metrics_and_gbdt_features_alignment(evaluate_script, reranking_tra
         "--data-dir", str(data_dir),
         "--num-features", "4"
     ]
-    subprocess.run(cmd_train, capture_output=True)
+    subprocess.run(cmd_train, capture_output=True, check=False)
     
     # 3. Evaluate degraded model
     out_degraded = tmp_path / "eval_degraded.json"
@@ -147,7 +148,7 @@ def test_eval_metrics_and_gbdt_features_alignment(evaluate_script, reranking_tra
         "--data-dir", str(data_dir),
         "--model-dir", str(temp_model_dir),
         "--output", str(out_degraded)
-    ], capture_output=True)
+    ], capture_output=True, check=False)
     
     with open(out_degraded, "r") as f:
         metrics_degraded = json.load(f)
@@ -170,7 +171,7 @@ def test_retrieval_candidate_bound_and_reranking_ndcg(evaluate_script, model_dir
         "--model-dir", str(model_dir),
         "--num-candidates", "200",
         "--output", str(out_200)
-    ], capture_output=True)
+    ], capture_output=True, check=False)
     
     with open(out_200, "r") as f:
         metrics_200 = json.load(f)
@@ -184,7 +185,7 @@ def test_retrieval_candidate_bound_and_reranking_ndcg(evaluate_script, model_dir
         "--model-dir", str(model_dir),
         "--num-candidates", "10",
         "--output", str(out_10)
-    ], capture_output=True)
+    ], capture_output=True, check=False)
     
     with open(out_10, "r") as f:
         metrics_10 = json.load(f)
@@ -227,7 +228,7 @@ def test_temporal_split_and_offline_eval_alignment(evaluate_script, data_dir, tm
     
     # Check that evaluating on a copy yields the same result
     out1 = tmp_path / "eval_alignment1.json"
-    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(data_dir), "--output", str(out1)], capture_output=True)
+    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(data_dir), "--output", str(out1)], capture_output=True, check=False)
     
     with open(out1, "r") as f:
         metrics1 = json.load(f)

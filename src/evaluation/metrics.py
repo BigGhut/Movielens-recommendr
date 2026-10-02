@@ -1,5 +1,7 @@
 import math
+
 import numpy as np
+
 
 def precision_at_k(predicted: list, actual: set, k: int) -> float:
     if not actual:

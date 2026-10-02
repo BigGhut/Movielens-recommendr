@@ -3,10 +3,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from src.retrieval.index import FAISSIndex
-from src.retrieval.candidates import unseen_candidates
-from src.models.ranker import CatBoostRanker, ranker_inputs
+
 from src.data.feature_store import build_pair_features
+from src.models.ranker import CatBoostRanker, ranker_inputs
+from src.retrieval.candidates import unseen_candidates
+from src.retrieval.index import FAISSIndex
 
 BLEND_PATH = Path("artifacts/models/ranker_blend.json")
 
@@ -27,8 +28,8 @@ class RecommendationPipeline:
                  faiss_index: FAISSIndex, catboost_ranker: CatBoostRanker, 
                  user_features: pd.DataFrame, item_features: pd.DataFrame, 
                  user2idx: dict, item2idx: dict, idx2item: dict, 
-                 movies_df: pd.DataFrame, ratings_df: pd.DataFrame, config: dict, user_genre_profiles: dict = None,
-                 user_recent_embs: np.ndarray = None):
+                 movies_df: pd.DataFrame, ratings_df: pd.DataFrame, config: dict, user_genre_profiles: dict | None = None,
+                 user_recent_embs: np.ndarray | None = None):
         self.user_embs = user_embs
         self.item_embs = item_embs
         self.faiss_index = faiss_index

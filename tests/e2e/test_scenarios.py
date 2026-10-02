@@ -1,22 +1,23 @@
+import concurrent.futures
 import os
+import subprocess
 import sys
 import time
-import subprocess
+
+import pandas as pd
 import pytest
 import requests
-import concurrent.futures
-import pandas as pd
 
 # --- Tier 4: Real-World Application Scenarios (5 Workloads) ---
 
 @pytest.fixture(scope="module", autouse=True)
 def run_pipelines_setup(preprocess_script, retrieval_train_script, reranking_train_script, data_dir, model_dir):
-    cmd_prep = [sys.executable, preprocess_script, "--processed-dir", str(data_dir)]
-    subprocess.run(cmd_prep, capture_output=True)
+    cmd_prep = [sys.executable, preprocess_script, "--raw-dir", str(data_dir / "raw"), "--processed-dir", str(data_dir)]
+    subprocess.run(cmd_prep, capture_output=True, check=False)
     cmd_ret = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-    subprocess.run(cmd_ret, capture_output=True)
+    subprocess.run(cmd_ret, capture_output=True, check=False)
     cmd_rer = [sys.executable, reranking_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-    subprocess.run(cmd_rer, capture_output=True)
+    subprocess.run(cmd_rer, capture_output=True, check=False)
 
 def test_scenario_1_standard_user_journey(api_client, data_dir):
     """Scenario 1: Standard User Recommendations Journey."""
@@ -76,8 +77,8 @@ def test_scenario_2_dynamic_training_and_redeployment(
                 if resp.status_code == 200:
                     success_count += 1
                 latencies.append(time.time() - start)
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - one failed probe does not stop the latency loop
+                print(f"query failed: {exc}")
             time.sleep(0.1)
         return success_count, max(latencies) if latencies else 0.0
 
@@ -87,17 +88,17 @@ def test_scenario_2_dynamic_training_and_redeployment(
         
         # Execute preprocessing
         cmd_prep = [sys.executable, preprocess_script, "--raw-dir", str(raw_dir), "--processed-dir", str(data_dir)]
-        res_prep = subprocess.run(cmd_prep, capture_output=True)
+        res_prep = subprocess.run(cmd_prep, capture_output=True, check=False)
         assert res_prep.returncode == 0
         
         # Execute retrieval train
         cmd_ret = [sys.executable, retrieval_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-        res_ret = subprocess.run(cmd_ret, capture_output=True)
+        res_ret = subprocess.run(cmd_ret, capture_output=True, check=False)
         assert res_ret.returncode == 0
         
         # Execute reranking train
         cmd_rerank = [sys.executable, reranking_train_script, "--model-dir", str(model_dir), "--data-dir", str(data_dir)]
-        res_rerank = subprocess.run(cmd_rerank, capture_output=True)
+        res_rerank = subprocess.run(cmd_rerank, capture_output=True, check=False)
         assert res_rerank.returncode == 0
         
         success_count, max_latency = query_future.result()
@@ -123,7 +124,7 @@ def test_scenario_3_multi_user_concurrent_traffic_peak(api_client):
         futures = {executor.submit(fetch_recs, uid): uid for uid in user_pool}
         results = [f.result() for f in concurrent.futures.as_completed(futures)]
         
-    statuses, recs_lists, latencies = zip(*results)
+    statuses, _recs_lists, latencies = zip(*results)
     
     # 1. 100% of requests complete successfully (no HTTP 500)
     for status in statuses:

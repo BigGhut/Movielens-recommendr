@@ -1,7 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from src.data.catalog import build_item_catalog, build_pair_contexts, build_user_contexts
+from src.data.catalog import (
+    build_item_catalog,
+    build_pair_contexts,
+    build_user_contexts,
+)
 from src.data.feature_store import build_pair_features, build_recent_centroids
 
 

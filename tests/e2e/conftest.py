@@ -1,19 +1,14 @@
+import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
-import os
 from pathlib import Path
+
 import pytest
 import requests
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--use-mock-data",
-        action="store_true",
-        default=False,
-        help="Use mock/synthetic data for fast local testing",
-    )
 
 @pytest.fixture(scope="session")
 def use_mock_data(request):
@@ -30,47 +25,49 @@ def mock_server(data_dir, model_dir):
     host = "127.0.0.1"
     url = f"http://{host}:{port}"
     
-    import os
     env = os.environ.copy()
     env["DATA_DIR"] = str(data_dir)
     env["MODEL_DIR"] = str(model_dir)
-    
-    # Start the mock server in a background process
-    process = subprocess.Popen(
-        [sys.executable, "tests/e2e/mock_server.py", "--host", host, "--port", str(port)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-    )
-    
-    # Wait for the server to start up by polling the /health endpoint
-    max_retries = 30
-    for _ in range(max_retries):
-        try:
-            response = requests.get(f"{url}/health")
-            if response.status_code == 200:
-                break
-        except requests.RequestException:
-            pass
-        time.sleep(0.1)
-    else:
-        # If it failed to start, terminate and print output
-        process.terminate()
-        stdout, stderr = process.communicate()
-        raise RuntimeError(
-            f"Mock server failed to start on {url}.\n"
-            f"STDOUT: {stdout.decode()}\n"
-            f"STDERR: {stderr.decode()}"
+
+    # A pipe fills up and deadlocks the server once uvicorn logs enough lines.
+    with tempfile.TemporaryFile() as log_handle:
+        process = subprocess.Popen(
+            [sys.executable, "tests/e2e/mock_server.py", "--host", host, "--port", str(port)],
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            env=env,
         )
-        
-    yield url
-    
-    # Terminate the process on teardown
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
+
+        def server_log() -> str:
+            log_handle.seek(0)
+            return log_handle.read().decode(errors="replace")
+
+        started = False
+        for _ in range(30):
+            try:
+                response = requests.get(f"{url}/health", timeout=1)
+                if response.status_code == 200:
+                    started = True
+                    break
+            except requests.RequestException:
+                pass
+            time.sleep(0.1)
+        if not started:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            raise RuntimeError(f"Mock server failed to start on {url}.\n{server_log()}")
+
+        try:
+            yield url
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
 
 class MockAPIClient:
     def __init__(self, base_url: str):
@@ -96,27 +93,44 @@ def api_client(mock_server):
 
 @pytest.fixture(scope="session")
 def data_dir(use_mock_data, tmp_path_factory):
+    if use_mock_data:
+        path = tmp_path_factory.mktemp("data")
+        subprocess.run(
+            [
+                sys.executable,
+                "tests/e2e/mock_preprocess.py",
+                "--raw-dir",
+                str(path / "raw"),
+                "--processed-dir",
+                str(path),
+            ],
+            check=True,
+        )
+        return path
     env_dir = os.getenv("DATA_DIR")
     if env_dir:
         return Path(env_dir)
-    if use_mock_data:
-        return tmp_path_factory.mktemp("data")
     return Path("data/processed")
 
 @pytest.fixture(scope="session")
 def model_dir(use_mock_data, tmp_path_factory):
+    if use_mock_data:
+        path = tmp_path_factory.mktemp("models")
+        # The mock server treats missing files as a degraded catalog.
+        # Present, empty files select the normal and cold-start branches.
+        (path / "item_index.faiss").write_bytes(b"")
+        (path / "reranker.lgb").write_bytes(b"")
+        return path
     env_dir = os.getenv("MODEL_DIR")
     if env_dir:
         return Path(env_dir)
-    if use_mock_data:
-        return tmp_path_factory.mktemp("models")
     return Path("models")
 
 @pytest.fixture(scope="session")
 def preprocess_script(use_mock_data):
     if use_mock_data:
         return "tests/e2e/mock_preprocess.py"
-    return "src/data/preprocess.py"
+    return "src/data/preprocessing.py"
 
 @pytest.fixture(scope="session")
 def retrieval_train_script(use_mock_data):

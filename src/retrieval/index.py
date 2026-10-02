@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import faiss
 import numpy as np
-from pathlib import Path
+
 
 class FAISSIndex:
     def __init__(self, embedding_dim: int):

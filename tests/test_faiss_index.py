@@ -1,7 +1,9 @@
-import pytest
+
 import numpy as np
-from pathlib import Path
+import pytest
+
 from src.retrieval.index import FAISSIndex
+
 
 @pytest.fixture
 def index():

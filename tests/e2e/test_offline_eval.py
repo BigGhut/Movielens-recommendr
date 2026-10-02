@@ -1,8 +1,9 @@
-import sys
 import json
 import subprocess
-import pandas as pd
+import sys
 from pathlib import Path
+
+import pandas as pd
 
 # Add tests/e2e to sys.path to import mock_evaluate
 sys.path.append(str(Path(__file__).parent))
@@ -13,8 +14,8 @@ import mock_evaluate
 def test_eval_metrics_present(evaluate_script, tmp_path, data_dir):
     """T1_F6_1: Verify evaluate.py outputs JSON with required metrics."""
     # Ensure processed test.csv exists
-    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--processed-dir", str(data_dir)]
-    subprocess.run(cmd_prep, capture_output=True)
+    cmd_prep = [sys.executable, "tests/e2e/mock_preprocess.py", "--raw-dir", str(data_dir / "raw"), "--processed-dir", str(data_dir)]
+    subprocess.run(cmd_prep, capture_output=True, check=False)
     
     out_json = tmp_path / "eval1.json"
     cmd = [
@@ -24,7 +25,7 @@ def test_eval_metrics_present(evaluate_script, tmp_path, data_dir):
         "--output", str(out_json),
         "--seed", "42"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0, f"Evaluation script failed: {res.stderr}"
     
     assert out_json.exists()
@@ -46,7 +47,7 @@ def test_eval_model_comparison(evaluate_script, tmp_path, data_dir):
         "--output", str(out_json),
         "--seed", "42"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert res.returncode == 0
     
     with open(out_json, "r") as f:
@@ -64,8 +65,8 @@ def test_eval_reproducibility(evaluate_script, tmp_path, data_dir):
     cmd1 = [sys.executable, evaluate_script, "--data-dir", str(data_dir), "--output", str(out1), "--seed", "100"]
     cmd2 = [sys.executable, evaluate_script, "--data-dir", str(data_dir), "--output", str(out2), "--seed", "100"]
     
-    subprocess.run(cmd1, capture_output=True)
-    subprocess.run(cmd2, capture_output=True)
+    subprocess.run(cmd1, capture_output=True, check=False)
+    subprocess.run(cmd2, capture_output=True, check=False)
     
     with open(out1, "rb") as f1, open(out2, "rb") as f2:
         assert f1.read() == f2.read(), "Evaluation outputs with same seed were not byte-identical"
@@ -80,7 +81,7 @@ def test_eval_metric_bounds(evaluate_script, tmp_path, data_dir):
         "--output", str(out_json),
         "--seed", "42"
     ]
-    subprocess.run(cmd, capture_output=True)
+    subprocess.run(cmd, capture_output=True, check=False)
     
     with open(out_json, "r") as f:
         metrics = json.load(f)
@@ -106,7 +107,7 @@ def test_eval_test_exclusivity(evaluate_script, tmp_path, data_dir):
     train_orig.to_csv(temp_data_dir / "train.csv", index=False)
     
     out_orig = tmp_path / "eval_orig.json"
-    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(temp_data_dir), "--output", str(out_orig)], capture_output=True)
+    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(temp_data_dir), "--output", str(out_orig)], capture_output=True, check=False)
     
     # Modify train.csv (add a dummy interaction)
     train_mod = train_orig.copy()
@@ -116,7 +117,7 @@ def test_eval_test_exclusivity(evaluate_script, tmp_path, data_dir):
     train_mod.to_csv(temp_data_dir / "train.csv", index=False)
     
     out_mod = tmp_path / "eval_mod.json"
-    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(temp_data_dir), "--output", str(out_mod)], capture_output=True)
+    subprocess.run([sys.executable, evaluate_script, "--data-dir", str(temp_data_dir), "--output", str(out_mod)], capture_output=True, check=False)
     
     with open(out_orig, "r") as f1, open(out_mod, "r") as f2:
         assert json.load(f1) == json.load(f2), "Evaluation metrics changed when train.csv was modified (it should evaluate only on test.csv)"
@@ -140,7 +141,7 @@ def test_eval_empty_test_split(evaluate_script, tmp_path):
         "--output", str(out_json),
         "--seed", "42"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     
     # The script should complete successfully and write 0.0 for metrics
     assert res.returncode == 0
@@ -252,7 +253,7 @@ def test_eval_write_protected_out(evaluate_script, tmp_path, data_dir):
         "--output", str(out_dir), # Directory instead of file
         "--seed", "42"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
     # The script should run and fall back to stdout printing on write error
     assert res.returncode == 0
     assert "JSON Metrics" in res.stdout

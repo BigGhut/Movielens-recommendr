@@ -1,14 +1,10 @@
-import pytest
 from pathlib import Path
+
 import pandas as pd
-import torch
-from src.data.preprocess import (
-    load_raw_data,
-    filter_users,
-    temporal_split,
-    preprocess_and_save
-)
-from src.data.loader import MovieLensDataLoader, MovieLensDataset
+import pytest
+
+from src.data.loader import MovieLensDataLoader
+from src.data.preprocessing import load_raw_data, preprocess_and_save
 
 
 @pytest.fixture
@@ -152,7 +148,7 @@ def test_single_rating_users_with_min_interactions_1(tmp_path, base_mock_content
     assert len(u4_test) == 1
     
     # Load PyTorch Datasets
-    train_ds, val_ds, test_ds = loader.get_pytorch_datasets()
+    train_ds, _val_ds, _test_ds = loader.get_pytorch_datasets()
     # Check that datasets can be initialized even if train has missing users
     assert len(train_ds) > 0
 

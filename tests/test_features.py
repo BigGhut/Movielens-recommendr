@@ -1,6 +1,9 @@
-import pytest
-from src.data.feature_store import get_feature_names, build_user_features, build_item_features
-import pandas as pd
+from src.data.feature_store import (
+    build_item_features,
+    build_user_features,
+    get_feature_names,
+)
+
 
 def test_feature_count():
     features = get_feature_names()

@@ -45,14 +45,19 @@ def set_seed(seed: int = 42):
     torch.cuda.manual_seed_all(seed)
 
 
-def _sample_hard_negatives(item_ids: torch.Tensor, weights: torch.Tensor, num_hard: int) -> torch.Tensor:
+def _sample_popularity_negatives(item_ids: torch.Tensor, weights: torch.Tensor, num_negatives: int) -> torch.Tensor:
+    """Draw item ids with probability proportional to train popularity.
+
+    A draw that collides with the positive is replaced by (id + 1) % num_items.
+    These are popularity-sampled negatives, not mined hard negatives.
+    """
     num_items = int(weights.shape[0])
-    hard_ids = torch.multinomial(weights, item_ids.shape[0] * num_hard, replacement=True)
-    hard_ids = hard_ids.view(item_ids.shape[0], num_hard)
-    collision = hard_ids == item_ids.unsqueeze(1)
+    sampled_ids = torch.multinomial(weights, item_ids.shape[0] * num_negatives, replacement=True)
+    sampled_ids = sampled_ids.view(item_ids.shape[0], num_negatives)
+    collision = sampled_ids == item_ids.unsqueeze(1)
     if collision.any() and num_items > 1:
-        hard_ids = torch.where(collision, (hard_ids + 1) % num_items, hard_ids)
-    return hard_ids
+        sampled_ids = torch.where(collision, (sampled_ids + 1) % num_items, sampled_ids)
+    return sampled_ids
 
 
 def train_two_tower(config: dict, train_df, movies_df, user2idx: dict, item2idx: dict, save_dir: Path) -> TwoTowerModel:
@@ -62,9 +67,12 @@ def train_two_tower(config: dict, train_df, movies_df, user2idx: dict, item2idx:
 
     catalog = build_item_catalog(movies_df, item2idx, train_df)
     recent_k = int(config.get("recent_k", 10))
-    num_hard = int(config.get("hard_negatives", 8))
+    num_sampled = int(config.get("popularity_negatives", config.get("hard_negatives", 8)))
     contexts = build_pair_contexts(train_df, user2idx, item2idx, catalog, recent_k)
-    print(f"Жанров: {len(catalog.genres)}, пар: {len(contexts.user_idx)}, recent_k={recent_k}, hard_negatives={num_hard}")
+    print(
+        f"Жанров: {len(catalog.genres)}, пар: {len(contexts.user_idx)}, "
+        f"recent_k={recent_k}, popularity_negatives={num_sampled}"
+    )
 
     dataset = PairDataset(contexts)
     loader = DataLoader(
@@ -98,9 +106,9 @@ def train_two_tower(config: dict, train_df, movies_df, user2idx: dict, item2idx:
             optimizer.zero_grad()
             user_embs = model.encode_users(user_ids, recent_genre, recent_year, recent_items, recent_mask)
             item_embs = model.encode_items(item_ids)
-            hard_ids = _sample_hard_negatives(item_ids, popularity, num_hard)
-            hard_embs = model.encode_items(hard_ids.reshape(-1)).view(item_ids.shape[0], num_hard, -1)
-            loss = model.compute_loss(user_embs, item_embs, config["temperature"], hard_embs)
+            sampled_ids = _sample_popularity_negatives(item_ids, popularity, num_sampled)
+            sampled_embs = model.encode_items(sampled_ids.reshape(-1)).view(item_ids.shape[0], num_sampled, -1)
+            loss = model.compute_loss(user_embs, item_embs, config["temperature"], sampled_embs)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -182,7 +190,12 @@ def report_test_recall(train_df, test_df, user2idx, item2idx, user_embs) -> None
 
 
 if __name__ == "__main__":
-    from src.data.preprocessing import create_id_mappings, load_movies, load_ratings, temporal_split
+    from src.data.preprocessing import (
+        create_id_mappings,
+        load_movies,
+        load_ratings,
+        temporal_split,
+    )
 
     with open("configs/model_config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)["two_tower"]

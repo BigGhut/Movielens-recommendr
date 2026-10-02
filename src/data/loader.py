@@ -1,8 +1,10 @@
 from pathlib import Path
-from typing import Tuple, Dict, Any
+from typing import Any
+
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
+
 
 class MovieLensDataset(Dataset):
     """PyTorch Dataset wrapper for MovieLens preprocessed split data."""
@@ -32,7 +34,7 @@ class MovieLensDataset(Dataset):
     def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         return {
             "user_id": self.user_ids[idx],
             "movie_id": self.movie_ids[idx],
@@ -60,7 +62,7 @@ class MovieLensDataLoader:
         self.val_path = self.data_dir / "val.csv"
         self.test_path = self.data_dir / "test.csv"
 
-    def load_splits(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def load_splits(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load the train, validation, and test splits as pandas DataFrames.
         
         Returns:
@@ -77,7 +79,7 @@ class MovieLensDataLoader:
         test = pd.read_csv(self.test_path)
         return train, val, test
 
-    def get_pytorch_datasets(self) -> Tuple[MovieLensDataset, MovieLensDataset, MovieLensDataset]:
+    def get_pytorch_datasets(self) -> tuple[MovieLensDataset, MovieLensDataset, MovieLensDataset]:
         """Load the splits and return PyTorch Dataset instances.
         
         Returns:
@@ -95,7 +97,7 @@ class MovieLensDataLoader:
         batch_size: int = 256,
         shuffle_train: bool = True,
         num_workers: int = 0
-    ) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    ) -> tuple[DataLoader, DataLoader, DataLoader]:
         """Load the splits and return PyTorch DataLoader instances.
         
         Args:

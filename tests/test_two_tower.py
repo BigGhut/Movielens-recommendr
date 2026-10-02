@@ -1,6 +1,8 @@
-import torch
 import pytest
+import torch
+
 from src.models.two_tower import TwoTowerModel
+
 
 @pytest.fixture
 def model():
@@ -58,15 +60,15 @@ def test_recent_history_changes_user_embedding(model):
     assert not torch.allclose(bare, with_history)
 
 
-def test_hard_negatives_change_loss(model):
+def test_popularity_sampled_negatives_change_loss(model):
     user_ids = torch.tensor([1, 2, 3])
     item_ids = torch.tensor([4, 5, 6])
     user_embs, item_embs = model(user_ids, item_ids)
     base = model.compute_loss(user_embs, item_embs)
-    hard = torch.nn.functional.normalize(torch.randn(3, 4, item_embs.shape[1]), dim=-1)
-    with_hard = model.compute_loss(user_embs, item_embs, hard_item_embs=hard)
-    assert torch.isfinite(with_hard)
-    assert not torch.allclose(base, with_hard)
+    sampled = torch.nn.functional.normalize(torch.randn(3, 4, item_embs.shape[1]), dim=-1)
+    with_sampled = model.compute_loss(user_embs, item_embs, sampled_item_embs=sampled)
+    assert torch.isfinite(with_sampled)
+    assert not torch.allclose(base, with_sampled)
 
 
 def test_different_users_different_embeddings(model):

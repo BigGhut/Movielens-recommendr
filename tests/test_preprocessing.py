@@ -1,5 +1,5 @@
-import pytest
 from src.data.preprocessing import temporal_split
+
 
 def test_temporal_split_no_leakage(synthetic_ratings):
     train, val, test = temporal_split(synthetic_ratings, min_ratings=5)

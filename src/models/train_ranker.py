@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+
 from src.data.feature_store import (
     build_item_features,
     build_pair_features,
@@ -43,7 +44,7 @@ def build_labeled_pairs(
     retrieved list: the ranker can only reorder what retrieval returned.
     """
     history = {
-        int(user_id): set(int(item_id) for item_id in item_ids)
+        int(user_id): {int(item_id) for item_id in item_ids}
         for user_id, item_ids in history_df.groupby("user_id")["item_id"]
     }
     positives = {}
@@ -87,7 +88,7 @@ def build_labeled_pairs(
 
 def _split_users(user_ids: np.ndarray, seed: int, train_fraction: float = 0.8) -> tuple[set, set]:
     rng = np.random.default_rng(seed)
-    users = np.array(sorted(set(int(user_id) for user_id in user_ids)))
+    users = np.array(sorted({int(user_id) for user_id in user_ids}))
     rng.shuffle(users)
     cut = int(len(users) * train_fraction)
     cut = min(max(cut, 1), len(users) - 1)
@@ -108,7 +109,7 @@ def _ndcg_for_scores(frame: pd.DataFrame, scores: np.ndarray, k: int = 10) -> fl
     recommendations = {}
     ground_truth = {}
     for user_id, group in scored.groupby("user_id", sort=False):
-        positives = set(int(item_id) for item_id in group.loc[group["label"] > 0, "item_id"])
+        positives = {int(item_id) for item_id in group.loc[group["label"] > 0, "item_id"]}
         if not positives:
             continue
         ranked = group.sort_values("score", ascending=False)["item_id"].astype(int).tolist()

@@ -1,8 +1,10 @@
-import torch
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 from torch_geometric.data import HeteroData
+
 from src.data.preprocessing import create_id_mappings
+
 
 def build_hetero_graph(ratings_df: pd.DataFrame, movies_df: pd.DataFrame, users_df: pd.DataFrame) -> tuple[HeteroData, dict, dict, dict]:
     """
@@ -61,14 +63,13 @@ def build_hetero_graph(ratings_df: pd.DataFrame, movies_df: pd.DataFrame, users_
     text_path = Path("artifacts/models/text_embeddings.pt")
     vision_path = Path("artifacts/models/vision_embeddings.pt")
     
-    has_multimodal = False
     if text_path.exists() and vision_path.exists():
         text_dict = torch.load(text_path, weights_only=False)
         vision_dict = torch.load(vision_path, weights_only=False)
         
         # Размерность = 768 (Text) + 768 (Vision) = 1536
-        text_dim = list(text_dict.values())[0].shape[-1]
-        vision_dim = list(vision_dict.values())[0].shape[-1]
+        text_dim = next(iter(text_dict.values())).shape[-1]
+        vision_dim = next(iter(vision_dict.values())).shape[-1]
         
         multimodal_x = torch.zeros((num_movies, text_dim + vision_dim), dtype=torch.float)
         
@@ -78,7 +79,6 @@ def build_hetero_graph(ratings_df: pd.DataFrame, movies_df: pd.DataFrame, users_
             multimodal_x[m_idx] = torch.tensor(np.concatenate([t_emb, v_emb]), dtype=torch.float)
             
         data['movie'].multimodal_x = multimodal_x
-        has_multimodal = True
     
     # --- Genre ---
     num_genres = len(genre2idx)

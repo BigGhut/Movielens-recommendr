@@ -1,11 +1,11 @@
 import argparse
 import asyncio
 import os
+
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
 
 app = FastAPI(title="Mock Two-Tower RecSys API")
 
@@ -19,7 +19,7 @@ app.add_middleware(
 
 class RecommendationResponse(BaseModel):
     user_id: int
-    recommendations: List[int]
+    recommendations: list[int]
     fallback: bool
     fallback_type: str = None
 
@@ -59,8 +59,9 @@ async def recommend(
                 _train_users_mtime = mtime
             if user_id not in _train_users_cache:
                 is_cold = True
-        except Exception:
-            pass
+        except (OSError, ValueError, KeyError, pd.errors.ParserError, pd.errors.EmptyDataError):
+            # A bad train.csv leaves the cold-start flag at its default.
+            is_cold = False
             
     # Check if index files exist to simulate DB failure graceful degradation
     index_file = "models/item_index.faiss"
@@ -70,7 +71,7 @@ async def recommend(
         index_file = os.path.join(model_dir_env, "item_index.faiss")
         reranker_file = os.path.join(model_dir_env, "reranker.lgb")
         
-    if not os.path.exists(index_file) or not os.path.exists(reranker_file):
+    if not os.path.exists(index_file) or not os.path.exists(reranker_file) or user_id < 0:
         return RecommendationResponse(
             user_id=user_id,
             recommendations=[201, 202, 203, 204, 205, 206, 207, 208, 209, 210],
@@ -86,14 +87,6 @@ async def recommend(
             recommendations=fallback_recs,
             fallback=True,
             fallback_type="textual_description"
-        )
-        
-    if user_id < 0:
-        return RecommendationResponse(
-            user_id=user_id,
-            recommendations=[201, 202, 203, 204, 205, 206, 207, 208, 209, 210],
-            fallback=True,
-            fallback_type="popularity_fallback"
         )
 
     # Regular user: re-ranking of 200 candidates to top 10

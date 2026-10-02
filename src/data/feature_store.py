@@ -1,5 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 def build_user_features(train_df: pd.DataFrame, movies_df: pd.DataFrame, users_df: pd.DataFrame) -> pd.DataFrame:
     user_stats = train_df.groupby('user_id').agg(
@@ -86,8 +87,8 @@ def build_recent_centroids(history_df: pd.DataFrame, item_embs: np.ndarray,
 def build_pair_features(user_feats: pd.DataFrame, item_feats: pd.DataFrame, 
                         user_embs: np.ndarray, item_embs: np.ndarray,
                         user_idx_map: dict, item_idx_map: dict, 
-                        pairs_df: pd.DataFrame, user_genre_profiles: dict = None,
-                        user_recent_embs: np.ndarray = None) -> pd.DataFrame:
+                        pairs_df: pd.DataFrame, user_genre_profiles: dict | None = None,
+                        user_recent_embs: np.ndarray | None = None) -> pd.DataFrame:
     df = pairs_df.copy()
     df = df.merge(user_feats, on='user_id', how='left')
     df = df.merge(item_feats, on='item_id', how='left')

@@ -1,6 +1,16 @@
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--use-mock-data",
+        action="store_true",
+        default=False,
+        help="Use mock/synthetic data for the e2e suite. MovieLens files are not in the repo.",
+    )
+
 
 @pytest.fixture
 def synthetic_ratings():

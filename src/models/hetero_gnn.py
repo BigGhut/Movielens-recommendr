@@ -1,9 +1,10 @@
 import torch
-import torch.nn as nn
-from torch_geometric.nn import SAGEConv, HeteroConv
+from torch import nn
+from torch_geometric.nn import HeteroConv, SAGEConv
+
 
 class RelationAwareGNN(nn.Module):
-    def __init__(self, hidden_channels: int, num_users: int, num_movies: int, num_genres: int, num_layers: int = 2, multimodal_dim: int = None):
+    def __init__(self, hidden_channels: int, num_users: int, num_movies: int, num_genres: int, num_layers: int = 2, multimodal_dim: int | None = None):
         super().__init__()
         
         self.multimodal_dim = multimodal_dim
@@ -60,7 +61,7 @@ class RelationAwareGNN(nn.Module):
         return x_dict_embs
 
 class HeteroLinkPredictionModel(nn.Module):
-    def __init__(self, hidden_channels: int, num_users: int, num_movies: int, num_genres: int, multimodal_dim: int = None):
+    def __init__(self, hidden_channels: int, num_users: int, num_movies: int, num_genres: int, multimodal_dim: int | None = None):
         super().__init__()
         self.gnn = RelationAwareGNN(hidden_channels, num_users, num_movies, num_genres, num_layers=2, multimodal_dim=multimodal_dim)
         

@@ -1,12 +1,18 @@
 import json
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException
-from src.api.schemas import RecommendationResponse, HealthResponse, MetricsResponse
+
 # Для зависимостей можно было бы использовать Depends, но так как у нас один pipeline, мы импортируем его из main
 # Чтобы избежать циклических импортов, мы можем получить доступ к app.state
-from fastapi import Request
+from fastapi import APIRouter, HTTPException, Request
+
+from src.api.schemas import HealthResponse, MetricsResponse, RecommendationResponse
 
 router = APIRouter()
+
+
+def _read_metrics(metrics_path: Path) -> dict:
+    with metrics_path.open(encoding="utf-8") as handle:
+        return json.load(handle)
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request):
@@ -62,7 +68,7 @@ async def get_history(request: Request, user_id: str):
     try:
         history = pipeline.get_user_history(user_id_int)
         return {"user_id": user_id_int, "history": history}
-    except Exception as e:
+    except Exception:  # noqa: BLE001 - a history lookup error returns an empty list
         return {"user_id": user_id_int, "history": []}
 
 @router.get("/metrics", response_model=MetricsResponse)
@@ -77,7 +83,6 @@ async def metrics():
             full_pipeline={}
         )
         
-    with open(metrics_path, "r") as f:
-        data = json.load(f)
+    data = _read_metrics(metrics_path)
         
     return MetricsResponse(**data)

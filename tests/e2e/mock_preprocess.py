@@ -1,6 +1,8 @@
 import argparse
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
+
 
 def generate_mock_raw_data(raw_dir: Path):
     """Generate tiny raw MovieLens-1M files for mock training/testing."""
@@ -84,10 +86,17 @@ def main():
     
     raw_dir = Path(args.raw_dir)
     processed_dir = Path(args.processed_dir)
-    
-    # If raw files don't exist, generate them
+
+    # If raw files don't exist, generate them. An existing empty file is an error,
+    # same as src.data.preprocessing.load_raw_data.
     if not (raw_dir / "ratings.dat").exists():
         generate_mock_raw_data(raw_dir)
+    for name in ("ratings.dat", "users.dat", "movies.dat"):
+        path = raw_dir / name
+        if not path.exists():
+            raise FileNotFoundError(f"Raw data file not found: {path}")
+        if path.stat().st_size == 0:
+            raise ValueError(f"Raw data file is empty: {path}")
         
     # Read the raw files
     ratings = pd.read_csv(

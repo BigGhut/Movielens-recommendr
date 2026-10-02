@@ -1,10 +1,10 @@
-import os
-import pytest
-import pandas as pd
-import torch
 from pathlib import Path
-from src.data.preprocess import preprocess_and_save
+
+import pandas as pd
+import pytest
+
 from src.data.loader import MovieLensDataLoader
+from src.data.preprocessing import preprocess_and_save
 
 
 @pytest.fixture
@@ -16,18 +16,15 @@ def custom_raw_data_dir(tmp_path):
         
         # Write ratings.dat
         with open(raw_dir / "ratings.dat", "w", encoding="latin-1") as f:
-            for r in ratings:
-                f.write(f"{r['user_id']}::{r['movie_id']}::{r['rating']}::{r['timestamp']}\n")
+            f.writelines(f"{r['user_id']}::{r['movie_id']}::{r['rating']}::{r['timestamp']}\n" for r in ratings)
                 
         # Write users.dat
         with open(raw_dir / "users.dat", "w", encoding="latin-1") as f:
-            for u in users:
-                f.write(f"{u['user_id']}::{u['gender']}::{u['age']}::{u['occupation']}::{u['zip_code']}\n")
+            f.writelines(f"{u['user_id']}::{u['gender']}::{u['age']}::{u['occupation']}::{u['zip_code']}\n" for u in users)
                 
         # Write movies.dat
         with open(raw_dir / "movies.dat", "w", encoding="latin-1") as f:
-            for m in movies:
-                f.write(f"{m['movie_id']}::{m['title']}::{m['genres']}\n")
+            f.writelines(f"{m['movie_id']}::{m['title']}::{m['genres']}\n" for m in movies)
                 
         return raw_dir
     return _create
@@ -67,7 +64,7 @@ def test_missing_user_metadata_crashes_loader(custom_raw_data_dir, tmp_path):
     loader = MovieLensDataLoader(data_dir=str(processed_dir))
     
     # Let's see what happens when we load it
-    train_ds, val_ds, test_ds = loader.get_pytorch_datasets()
+    train_ds, _val_ds, _test_ds = loader.get_pytorch_datasets()
     print("Age tensor:", train_ds.age)
     print("Occupation tensor:", train_ds.occupation)
     # They are converted to long tensors, but contain garbage values
@@ -101,7 +98,7 @@ def test_missing_movie_metadata_causes_string_issues(custom_raw_data_dir, tmp_pa
     preprocess_and_save(raw_dir, processed_dir, min_interactions=5)
     
     loader = MovieLensDataLoader(data_dir=str(processed_dir))
-    train_ds, val_ds, test_ds = loader.get_pytorch_datasets()
+    train_ds, _val_ds, _test_ds = loader.get_pytorch_datasets()
     
     # Let's inspect the items in the train dataset
     # The first item has movie_id 101, which has NaN for title and genres
