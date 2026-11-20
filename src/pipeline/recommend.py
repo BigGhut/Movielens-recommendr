@@ -8,8 +8,40 @@ from src.data.feature_store import build_pair_features
 from src.models.ranker import CatBoostRanker, ranker_inputs
 from src.retrieval.candidates import unseen_candidates
 from src.retrieval.index import FAISSIndex
+from src.retrieval.rp3 import (
+    TrainRP3,
+    rp3_enabled_settings,
+    source_feature_columns,
+    trained_source_columns,
+    two_tower_score_row,
+    union_with_rp3,
+)
 
 BLEND_PATH = Path("artifacts/models/ranker_blend.json")
+
+
+def _build_rp3(
+    config: dict,
+    train_df: pd.DataFrame | None,
+    user2idx: dict,
+    item2idx: dict,
+) -> TrainRP3 | None:
+    """Train-only RP3 hop. The flag off returns None before any graph is built."""
+    settings = rp3_enabled_settings(config)
+    if settings is None:
+        return None
+    if train_df is None:
+        raise ValueError(
+            "retrieval.rp3.enabled requires train_df so validation and test stay out of the graph"
+        )
+    return TrainRP3.from_frame(
+        train_df,
+        user2idx,
+        item2idx,
+        settings["alpha"],
+        settings["beta"],
+        settings["top_k"],
+    )
 
 
 def _load_ranker_blend(path: Path = BLEND_PATH) -> tuple[str, float]:
@@ -29,7 +61,7 @@ class RecommendationPipeline:
                  user_features: pd.DataFrame, item_features: pd.DataFrame, 
                  user2idx: dict, item2idx: dict, idx2item: dict, 
                  movies_df: pd.DataFrame, ratings_df: pd.DataFrame, config: dict, user_genre_profiles: dict | None = None,
-                 user_recent_embs: np.ndarray | None = None):
+                 user_recent_embs: np.ndarray | None = None, train_df: pd.DataFrame | None = None):
         self.user_embs = user_embs
         self.item_embs = item_embs
         self.faiss_index = faiss_index
@@ -47,6 +79,7 @@ class RecommendationPipeline:
         self.user_genre_profiles = user_genre_profiles
         self.user_recent_embs = user_recent_embs
         self.ranker_mode, self.ranker_beta = _load_ranker_blend()
+        self._rp3 = _build_rp3(config, train_df, user2idx, item2idx)
         
         # Предрасчет популярных фильмов для cold-start
         item_counts = ratings_df['item_id'].value_counts()
@@ -74,17 +107,28 @@ class RecommendationPipeline:
         u_idx = self.user2idx[user_id]
         u_emb = self.user_embs[u_idx:u_idx+1]
         history = self.user_history.get(user_id, set())
-        candidates = unseen_candidates(
+        tower = unseen_candidates(
             u_emb, self.faiss_index, self.idx2item, history, self._retrieval_k()
         )
-        if not candidates:
-            return self.recommend_cold_start(top_k)
+        source_columns = None
+        if self._rp3 is None:
+            if not tower:
+                return self.recommend_cold_start(top_k)
+            candidates = tower
+            ranks = list(range(len(candidates)))
+        else:
+            candidates, ranks, source_columns = self._with_rp3(u_idx, u_emb, tower, history)
+            if not candidates:
+                return self.recommend_cold_start(top_k)
 
         pairs_df = pd.DataFrame({
             'user_id': [user_id] * len(candidates),
             'item_id': candidates,
-            'retrieval_rank': list(range(len(candidates))),
+            'retrieval_rank': ranks,
         })
+        if source_columns:
+            for column, values in source_columns.items():
+                pairs_df[column] = values
         X = build_pair_features(
             self.user_features, self.item_features,
             self.user_embs, self.item_embs,
@@ -113,6 +157,22 @@ class RecommendationPipeline:
                 })
                 
         return results
+
+    def _with_rp3(self, user_index: int, user_emb: np.ndarray, tower: list[int], history: set):
+        """Union the served FAISS list with RP3. Source columns follow the loaded model."""
+        rp3_scores = self._rp3.score_row(user_index, history)
+        rp3_ids = self._rp3.top_ids(rp3_scores)
+        candidates, ranks = union_with_rp3(tower, rp3_ids, self._retrieval_k())
+        wanted = trained_source_columns(self.catboost_ranker)
+        if not wanted:
+            return candidates, ranks, None
+        tt_scores = two_tower_score_row(
+            user_emb, self.faiss_index, len(self.item2idx), history, self.item2idx,
+        )
+        columns = source_feature_columns(
+            candidates, tower, rp3_ids, tt_scores, rp3_scores, self._rp3.item2idx,
+        )
+        return candidates, ranks, {column: columns[column] for column in wanted}
 
     def _retrieval_k(self) -> int:
         if 'retrieval_top_k' in self.config:

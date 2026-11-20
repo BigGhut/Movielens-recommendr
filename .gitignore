@@ -10,6 +10,8 @@ __pycache__
 /data/
 catboost_info/
 artifacts/
+reports/rp3_models/
+reports/rp3_seeds/
 *.zip
 .agents/
 *.egg-info/

@@ -24,3 +24,12 @@ pipeline:
   retrieval_top_k: 200
   final_top_k: 10
   min_user_ratings: 5
+
+# RP3beta is a second candidate source. Off keeps the published FAISS list.
+# Co-visitation has no switch: the offline bench measured it and it stays out.
+retrieval:
+  rp3:
+    enabled: false
+    alpha: 1.0
+    beta: 0.7
+    top_k: 200
