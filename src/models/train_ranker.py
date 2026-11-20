@@ -23,6 +23,13 @@ from src.evaluation.metrics import evaluate_model
 from src.models.ranker import CAT_FEATURES, TEXT_FEATURES, CatBoostRanker, ranker_inputs
 from src.retrieval.candidates import unseen_candidates
 from src.retrieval.index import FAISSIndex
+from src.retrieval.rp3 import (
+    TrainRP3,
+    rp3_enabled_settings,
+    source_feature_columns,
+    two_tower_score_row,
+    union_with_rp3,
+)
 
 BLEND_BETAS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.0)
 
@@ -36,12 +43,16 @@ def build_labeled_pairs(
     faiss_index: FAISSIndex,
     top_k: int = 200,
     positive_threshold: float = 4.0,
+    rp3: TrainRP3 | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """Candidates the server will rank, labeled by the next held-out interaction.
 
     Train-history items are filtered at serve time, so they are not targets.
     A user is kept only when that next relevant item is already inside the
     retrieved list: the ranker can only reorder what retrieval returned.
+    ``rp3`` widens that list to the FAISS top-k unioned with the RP3 top-k and adds
+    the source columns a retrained ranker expects. The default leaves the
+    FAISS list unchanged.
     """
     history = {
         int(user_id): {int(item_id) for item_id in item_ids}
@@ -61,23 +72,42 @@ def build_labeled_pairs(
             skipped += 1
             continue
         user_idx = user2idx[user_id]
-        candidates = unseen_candidates(
+        seen = history.get(user_id, set())
+        tower = unseen_candidates(
             user_embs[user_idx : user_idx + 1],
             faiss_index,
             idx2item,
-            history.get(user_id, set()),
+            seen,
             top_k,
         )
+        source_columns = None
+        if rp3 is None:
+            candidates = tower
+            ranks = [float(rank) for rank in range(len(candidates))]
+        else:
+            rp3_scores = rp3.score_row(user_idx, seen)
+            rp3_ids = rp3.top_ids(rp3_scores)
+            candidates, ranks = union_with_rp3(tower, rp3_ids, top_k)
+            tt_scores = two_tower_score_row(
+                user_embs[user_idx], faiss_index, len(rp3.item2idx), seen, rp3.item2idx,
+            )
+            source_columns = source_feature_columns(
+                candidates, tower, rp3_ids, tt_scores, rp3_scores, rp3.item2idx,
+            )
         if positive_item not in candidates:
             skipped += 1
             continue
         kept += 1
-        for rank, item_id in enumerate(candidates):
-            rows.append({
+        for offset, (item_id, rank) in enumerate(zip(candidates, ranks, strict=True)):
+            row = {
                 "user_id": user_id,
                 "item_id": item_id,
                 "retrieval_rank": float(rank),
-            })
+            }
+            if source_columns is not None:
+                for name, values in source_columns.items():
+                    row[name] = values[offset]
+            rows.append(row)
             labels.append(1.0 if item_id == positive_item else 0.0)
 
     print(f"Группы с позитивом в top-{top_k}: {kept}, пропущены: {skipped}")
@@ -154,11 +184,12 @@ def train_ranker(
     save_dir: Path,
     top_k: int = 200,
     user_recent_embs: np.ndarray = None,
+    rp3: TrainRP3 | None = None,
 ) -> CatBoostRanker:
     print("Сбор кандидатов для ранкера...")
     pairs, labels = build_labeled_pairs(
         history_df, label_df, user_embs, user2idx, idx2item, faiss_index,
-        top_k=top_k, positive_threshold=config["positive_threshold"],
+        top_k=top_k, positive_threshold=config["positive_threshold"], rp3=rp3,
     )
     if pairs.empty:
         raise RuntimeError("Нет групп с позитивом в списке кандидатов")
@@ -231,6 +262,14 @@ if __name__ == "__main__":
     faiss_index = FAISSIndex.load(Path("artifacts/indexes/faiss_index.index"))
     recent_k = int(full_config.get("two_tower", {}).get("recent_k", 10))
     user_recent_embs = build_recent_centroids(train_df, item_embs, user2idx, item2idx, recent_k)
+    rp3_settings = rp3_enabled_settings(full_config)
+    rp3 = None
+    if rp3_settings is not None:
+        print("RP3 включён: кандидаты ранкера — объединение FAISS и RP3 по train")
+        rp3 = TrainRP3.from_frame(
+            train_df, user2idx, item2idx,
+            rp3_settings["alpha"], rp3_settings["beta"], rp3_settings["top_k"],
+        )
 
     train_ranker(
         config, train_df, val_df,
@@ -241,4 +280,5 @@ if __name__ == "__main__":
         Path("artifacts/models"),
         top_k=top_k,
         user_recent_embs=user_recent_embs,
+        rp3=rp3,
     )

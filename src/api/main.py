@@ -89,7 +89,8 @@ async def lifespan(app: FastAPI):
             user_features=user_features, item_features=item_features,
             user2idx=user2idx, item2idx=item2idx, idx2item=idx2item,
             movies_df=movies_df, ratings_df=ratings_df, config=config, user_genre_profiles=user_genre_profiles,
-            user_recent_embs=user_recent_embs,
+            # Full ratings stay the served history. The RP3 graph uses train only.
+            user_recent_embs=user_recent_embs, train_df=train_df,
         )
         app.state.pipeline = pipeline
         print("Модели успешно загружены!")
